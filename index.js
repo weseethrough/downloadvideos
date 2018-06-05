@@ -5,10 +5,13 @@ const fetch = require('node-fetch');
 const https = require('https');
 const url = require('url');
 const sleep = require('await-sleep');
+const moment = require('moment');
+require("moment-duration-format");
 
 const MAX_ATTEMPTS = 5;
-const UPDATE_AFTER_FILES = 3;
+const UPDATE_AFTER_FILES = 1;
 const BASE_DELAY = 1500;
+const TIMEOUT_MS = 60 * 1000;
 
 function countLines(urlsFile) {
 	const liner = new LineByLine(urlsFile);
@@ -40,6 +43,11 @@ function download(fileUrl, outDir) {
 		  else {
 			  response.pipe(file);
 			}
+		});
+
+		request.setTimeout(TIMEOUT_MS, function( ) {
+    	file.end();
+		  reject(`Timeout after ${TIMEOUT_MS / 1000}ms`);
 		});
 
 		request.on('error', function(err) {
@@ -92,12 +100,23 @@ async function main(urlsFile, outDir) {
 	if (fs.existsSync(errorsFile))
 		fs.unlinkSync(errorsFile);
 
+	const startTime = moment();
+
 	while (l = liner.next()) {
 			const url = l.toString('ascii').trim();
 	    lineNumber++;
 
 	    if (lineNumber % UPDATE_AFTER_FILES == 0) {
-	    	console.log(`starting download ${lineNumber} of ${totalLines}... (${Math.round(lineNumber / totalLines * 10) / 10}% complete)`);
+	    	const currentTime = moment();
+	    	const pctComplete = lineNumber / totalLines;
+
+				const currentDuration = moment.duration(currentTime.diff(startTime));
+	    	const currentDurationMs = currentDuration.asMilliseconds();
+	    	const estDurationMs = Math.round((currentDurationMs / pctComplete) - currentDuration);
+	    	const estDuration = moment.duration(estDurationMs);
+	    	// console.log(`has taken ${currentDuration.format()} so far`);
+	    	console.log(
+	    		`starting download ${lineNumber} of ${totalLines}... (${Math.round(pctComplete * 1000) / 10}% complete - ${estDuration.format()} to go)`);
 	    }
 
 	    try {
