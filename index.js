@@ -23,7 +23,7 @@ function countLines(urlsFile) {
 }
 
 function download(fileUrl) {
-	const filename = url.parse(fileUrl).pathname.replace(/[^a-zA-Z0-9.]/g, '_');
+	const filename = outdir + '/' + url.parse(fileUrl).pathname.replace(/[^a-zA-Z0-9.]/g, '_').replace(/^_uploads_/, '');
 
 	console.log(`downloading ${fileUrl} -> ${filename}`);
 	
@@ -33,13 +33,16 @@ function download(fileUrl) {
 		
 	  const request = https.get(fileUrl, function(response) {
 		  response.pipe(file);
-		  console.log(`downloaded ${fileUrl} -> ${filename}`);
-		  resolve();
 		});
 
 		request.on('error', function(err) {
 		  console.log(`failed to download ${fileUrl} -> ${filename}`);
 			reject(err);
+		});
+
+		request.on('end', function() {
+		  console.log(`downloaded ${fileUrl} -> ${filename}`);
+		  resolve();
 		});
 	});
 
