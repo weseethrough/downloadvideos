@@ -4,10 +4,11 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const https = require('https');
 const url = require('url');
+const sleep = require('await-sleep');
 
-const outdir = 'files';
-
-mkdirp(outdir);
+const MAX_ATTEMPTS = 5;
+const UPDATE_AFTER_FILES = 3;
+const BASE_DELAY = 1500;
 
 function countLines(urlsFile) {
 	const liner = new LineByLine(urlsFile);
@@ -22,8 +23,8 @@ function countLines(urlsFile) {
 	return lines;
 }
 
-function download(fileUrl) {
-	const filename = outdir + '/' + url.parse(fileUrl).pathname.replace(/[^a-zA-Z0-9.]/g, '_').replace(/^_uploads_/, '');
+function download(fileUrl, outDir) {
+	const filename = outDir + '/' + url.parse(fileUrl).pathname.replace(/[^a-zA-Z0-9.]/g, '_').replace(/^_uploads_/, '');
 
 	//console.log(`downloading ${fileUrl} -> ${filename}`);
 	
@@ -55,9 +56,30 @@ function download(fileUrl) {
 	return p;
 }
 
-async function main(urlsFile) {
+async function downloadStubbornly(fileUrl, outDir) {
+	let e;
+
+	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+		try {
+			await download(fileUrl, outDir);
+			return;
+		} catch (err) {
+			e = err;
+			const delay = BASE_DELAY * (attempt);
+			console.warn(`failed to download on attempt ${attempt}. waiting ${delay / 1000} secs before next attempt...`);
+			await sleep(delay);
+		}
+	}
+	throw `failed to download ${fileUrl} after ${MAX_ATTEMPTS} attempts. Error: ${e}`;
+}
+
+async function main(urlsFile, outDir) {
+	mkdirp(outDir);
+
+	const errorsFile = urlsFile + '.err';
+
 	const totalLines = countLines(urlsFile);
-	console.log(`There are ${totalLines} files to download.`);
+	console.log(`There are ${totalLines} files to download. Any failed downloads will appear in ${errorsFile}.`);
 
 	const liner = new LineByLine(urlsFile);
 	 
@@ -67,17 +89,19 @@ async function main(urlsFile) {
 	let successfulDownloads = 0;
 	let failedDownloads = 0;
 
-	const errorsFile = urlsFile + '.err';
-
 	if (fs.existsSync(errorsFile))
 		fs.unlinkSync(errorsFile);
 
 	while (l = liner.next()) {
-	    const url = l.toString('ascii').trim();
+			const url = l.toString('ascii').trim();
 	    lineNumber++;
 
+	    if (lineNumber % UPDATE_AFTER_FILES == 0) {
+	    	console.log(`starting download ${lineNumber} of ${totalLines}... (${Math.round(lineNumber / totalLines * 10) / 10}% complete)`);
+	    }
+
 	    try {
-	    	await download(url);//.then(() => console.log('fooooffo'));
+	    	await downloadStubbornly(url, outDir);
 	    	successfulDownloads++;
 	    } catch (e) {
 	    	failedDownloads++;
@@ -86,12 +110,12 @@ async function main(urlsFile) {
 	    }
 	}
 	 
-	console.log(`${successfulDownloads} files successfully downloaded to ${outdir}. ${failedDownloads} failures; see ${errorsFile}`);
+	console.log(`${successfulDownloads} files successfully downloaded to ${outDir}. ${failedDownloads} failures; see ${errorsFile}`);
 }
 
-if (process.argv.length < 3) {
-	console.log('node fetchfiles <urlsfile>');
+if (process.argv.length < 4) {
+	console.log('node fetchfiles <urlsfile> <outdir>');
 	exit(1);
 }
 
-main(process.argv[2]);
+main(process.argv[2], process.argv[3]);
