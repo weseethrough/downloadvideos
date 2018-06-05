@@ -32,7 +32,8 @@ function download(fileUrl) {
 		const file = fs.createWriteStream(filename);
 		
 	  const request = https.get(fileUrl, function(response) {
-		  response.pipe(file);
+		  console.log(`downloading ${fileUrl} -> ${filename}...`);
+			response.pipe(file);
 		});
 
 		request.on('error', function(err) {
