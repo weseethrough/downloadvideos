@@ -25,24 +25,29 @@ function countLines(urlsFile) {
 function download(fileUrl) {
 	const filename = outdir + '/' + url.parse(fileUrl).pathname.replace(/[^a-zA-Z0-9.]/g, '_').replace(/^_uploads_/, '');
 
-	console.log(`downloading ${fileUrl} -> ${filename}`);
+	//console.log(`downloading ${fileUrl} -> ${filename}`);
 	
 	const p = new Promise(function(resolve, reject) {
 		//const resp = await fetch(url);
 		const file = fs.createWriteStream(filename);
 		
 	  const request = https.get(fileUrl, function(response) {
-		  console.log(`downloading ${fileUrl} -> ${filename}...`);
-			response.pipe(file);
+		  //console.log(response.statusCode);
+		  if (response.statusCode >= 400) {
+			  reject('HTTP code ' + response.statusCode);
+		  }
+		  else {
+			  response.pipe(file);
+			}
 		});
 
 		request.on('error', function(err) {
-		  console.log(`failed to download ${fileUrl} -> ${filename}`);
-			reject(err);
+			file.end();
+		  reject(err);
 		});
 
-		request.on('end', function() {
-		  console.log(`downloaded ${fileUrl} -> ${filename}`);
+		request.on('close', function() {
+		  file.end();
 		  resolve();
 		});
 	});
@@ -71,10 +76,8 @@ async function main(urlsFile) {
 	    const url = l.toString('ascii').trim();
 	    lineNumber++;
 
-	    //console.log(`downloading ${url} -> ...`);
-
 	    try {
-	    	await download(url);
+	    	await download(url);//.then(() => console.log('fooooffo'));
 	    	successfulDownloads++;
 	    } catch (e) {
 	    	failedDownloads++;
